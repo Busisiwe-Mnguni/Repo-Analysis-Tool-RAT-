@@ -81,8 +81,10 @@ Open `http://localhost:5173` in your browser, then either:
 - **Upload a zip** of a repository that contains its `.git` directory, or
 - **Paste a clone URL** (`https://`, `git@`, or `file://`) to have the server deep-clone it.
 
-Once analyzed, select the repository from the top-bar dropdown and use the filter panel
-to scope by author, file/directory, or commit set.
+Once analyzed, pick the repository from the home grid (every repo you've added is listed
+there as a card) and use the filter panel to scope by author, file/directory, or commit
+set. Use the "← All repositories" button in the top bar to go back to the grid, and the
+"Sort by" control above each table as an alternative to clicking column headers.
 
 ### Other scripts
 
