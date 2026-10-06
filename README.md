@@ -64,7 +64,7 @@ binary files are excluded from every measurement, exactly as git itself detects 
 ### Clone and run locally
 
 ```bash
-git clone https://github.com/<your-account>/Repo-Analysis-Tool-RAT-.git
+git clone https://github.com/Busisiwe-Mnguni/Repo-Analysis-Tool-RAT-.git
 cd Repo-Analysis-Tool-RAT-
 
 npm install
