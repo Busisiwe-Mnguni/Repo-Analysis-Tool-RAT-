@@ -14,7 +14,7 @@ function useSort<K extends string>(initial: K, initialDir: Dir = 'desc') {
       setDir('desc');
     }
   };
-  return { key, dir, toggle };
+  return { key, dir, toggle, setKey, setDir };
 }
 
 function Th<K extends string>({
@@ -41,6 +41,39 @@ function cmpNum(a: number, b: number, dir: Dir): number {
 }
 function cmpStr(a: string, b: string, dir: Dir): number {
   return dir === 'asc' ? a.localeCompare(b) : b.localeCompare(a);
+}
+
+/**
+ * Explicit sort control shown above every table — a dropdown of sortable
+ * fields plus a direction toggle button, as an alternative to clicking the
+ * column headers directly.
+ */
+function SortBar<K extends string>({
+  sort,
+  options,
+}: {
+  sort: { key: K; dir: Dir; setKey: (k: K) => void; setDir: (d: Dir) => void };
+  options: { value: K; label: string }[];
+}) {
+  return (
+    <div className="sort-bar">
+      <span className="sort-bar-label">Sort by</span>
+      <select value={sort.key} onChange={(e) => sort.setKey(e.target.value as K)} aria-label="Sort field">
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      <button
+        className="ghost sort-dir-btn"
+        onClick={() => sort.setDir(sort.dir === 'asc' ? 'desc' : 'asc')}
+        title="Toggle sort direction"
+      >
+        {sort.dir === 'asc' ? '▲ Ascending' : '▼ Descending'}
+      </button>
+    </div>
+  );
 }
 
 /** Author ownership chip — the practical realization of ω_H,o,a (top contributor + share). */
@@ -115,7 +148,19 @@ export function AuthorsTable({
     }
   });
   return (
-    <div className="table-wrap">
+    <>
+      <SortBar
+        sort={sort}
+        options={[
+          { value: 'commits', label: 'Commits' },
+          { value: 'name', label: 'Author name' },
+          { value: 'added', label: 'Added' },
+          { value: 'removed', label: 'Removed' },
+          { value: 'churn', label: 'Churn' },
+          { value: 'files', label: 'Files' },
+        ]}
+      />
+      <div className="table-wrap">
       <table>
         <thead>
           <tr>
@@ -157,7 +202,8 @@ export function AuthorsTable({
           )}
         </tbody>
       </table>
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -187,7 +233,22 @@ export function FilesTable({
     }
   });
   return (
-    <div className="table-wrap">
+    <>
+      <SortBar
+        sort={sort}
+        options={[
+          { value: 'commits', label: 'Commits' },
+          { value: 'path', label: 'File path' },
+          { value: 'added', label: 'Added' },
+          { value: 'removed', label: 'Removed' },
+          { value: 'churn', label: 'Churn' },
+          { value: 'modFrequency', label: 'Modification freq.' },
+          { value: 'churnRate', label: 'Churn rate' },
+          { value: 'authors', label: 'Authors' },
+          { value: 'lastDate', label: 'Last change' },
+        ]}
+      />
+      <div className="table-wrap">
       <table>
         <thead>
           <tr>
@@ -234,7 +295,8 @@ export function FilesTable({
           )}
         </tbody>
       </table>
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -264,7 +326,22 @@ export function DirsTable({
     }
   });
   return (
-    <div className="table-wrap">
+    <>
+      <SortBar
+        sort={sort}
+        options={[
+          { value: 'commits', label: 'Commits' },
+          { value: 'path', label: 'Directory path' },
+          { value: 'files', label: 'Files' },
+          { value: 'subdirs', label: 'Subdirs' },
+          { value: 'added', label: 'Added' },
+          { value: 'removed', label: 'Removed' },
+          { value: 'churn', label: 'Churn' },
+          { value: 'churnRate', label: 'Churn rate' },
+          { value: 'modFrequency', label: 'Modification freq.' },
+        ]}
+      />
+      <div className="table-wrap">
       <table>
         <thead>
           <tr>
@@ -309,7 +386,8 @@ export function DirsTable({
           )}
         </tbody>
       </table>
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -327,7 +405,18 @@ export function CommitsTable({ rows, total }: { rows: CommitMetric[]; total: num
     }
   });
   return (
-    <div className="table-wrap">
+    <>
+      <SortBar
+        sort={sort}
+        options={[
+          { value: 'date', label: 'Date' },
+          { value: 'authorName', label: 'Author name' },
+          { value: 'added', label: 'Added' },
+          { value: 'removed', label: 'Removed' },
+          { value: 'files', label: 'Files' },
+        ]}
+      />
+      <div className="table-wrap">
       <table>
         <thead>
           <tr>
@@ -364,6 +453,7 @@ export function CommitsTable({ rows, total }: { rows: CommitMetric[]; total: num
           Showing {rows.length} of {fmtInt(total)} commits — narrow the filters to see more.
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

@@ -5,6 +5,7 @@ import { CommitPicker } from './components/CommitPicker';
 import { Dashboard } from './components/Dashboard';
 import { EMPTY_FILTER, FilterPanel, isFilterActive, type FilterState } from './components/FilterPanel';
 import { MergeModal } from './components/MergeModal';
+import { RepoGrid } from './components/RepoGrid';
 import { UploadModal } from './components/UploadModal';
 
 function toMetricsFilter(f: FilterState): MetricsFilter {
@@ -123,12 +124,19 @@ export default function App() {
 
   const onDelete = async () => {
     if (!repoId || !detail) return;
-    if (!window.confirm(`Delete repository "${detail.meta.name}" and its analysis data?`)) return;
-    await api.deleteRepo(repoId);
+    await deleteRepo(repoId, detail.meta.name);
+  };
+
+  /** Delete any repository by id (used by both the top-bar button and the repo-grid card). */
+  const deleteRepo = async (id: string, name: string) => {
+    if (!window.confirm(`Delete repository "${name}" and its analysis data?`)) return;
+    await api.deleteRepo(id);
     const list = await api.listRepos();
     setRepos(list);
-    setRepoId(list[0]?.id ?? null);
+    if (repoId === id) setRepoId(null); // back to the repo grid if the open repo was removed
   };
+
+  const goBack = () => setRepoId(null);
 
   const openPicker = () => {
     if (!repoId) return;
@@ -166,25 +174,20 @@ export default function App() {
         <div className="brand">
           RAT<span className="brand-sub">Repo Analysis Tool</span>
         </div>
-        <select
-          className="repo-select"
-          value={repoId ?? ''}
-          onChange={(e) => setRepoId(e.target.value || null)}
-          aria-label="Repository"
-        >
-          {repos.length === 0 && <option value="">No repositories yet</option>}
-          {repos.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.name}
-            </option>
-          ))}
-        </select>
+        {repoId && (
+          <button className="ghost back-btn" onClick={goBack} title="Back to all repositories">
+            ← All repositories
+          </button>
+        )}
         {selectedMeta && (
-          <span className="meta-chip">
-            <b>{selectedMeta.commits}</b> commits · <b>{selectedMeta.authors}</b> authors ·{' '}
-            {selectedMeta.source === 'zip' ? 'uploaded zip' : 'cloned'}
-            {selectedMeta.hasMailmap ? ' · .mailmap applied' : ''}
-          </span>
+          <>
+            <span className="current-repo-name">{selectedMeta.name}</span>
+            <span className="meta-chip">
+              <b>{selectedMeta.commits}</b> commits · <b>{selectedMeta.authors}</b> authors ·{' '}
+              {selectedMeta.source === 'zip' ? 'uploaded zip' : 'cloned'}
+              {selectedMeta.hasMailmap ? ' · .mailmap applied' : ''}
+            </span>
+          </>
         )}
         <div className="spacer" />
         <button className="primary" onClick={() => setShowUpload(true)}>
@@ -204,18 +207,19 @@ export default function App() {
 
       {pageError && <div className="banner error" style={{ margin: '12px 20px 0' }}>{pageError}</div>}
 
-      {!detail ? (
+      {!repoId ? (
+        <main className="app-main">
+          <RepoGrid
+            repos={repos}
+            onSelect={setRepoId}
+            onDelete={(r) => deleteRepo(r.id, r.name)}
+            onAdd={() => setShowUpload(true)}
+          />
+        </main>
+      ) : !detail ? (
         <div className="empty">
-          <div className="logo">📊</div>
-          <h1>{repos.length === 0 ? 'No repositories analyzed yet' : 'Select a repository'}</h1>
-          <p>
-            RAT measures per-author, per-file, per-directory and whole-repository metrics for any git
-            repository. Add one by uploading a zip that contains the .git directory, or by cloning a
-            remote URL.
-          </p>
-          <button className="primary" onClick={() => setShowUpload(true)}>
-            + Add your first repository
-          </button>
+          <span className="spin" />
+          Loading repository…
         </div>
       ) : (
         <main className="app-main">
