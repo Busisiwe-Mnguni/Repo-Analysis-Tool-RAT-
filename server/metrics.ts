@@ -9,6 +9,7 @@ import type {
   MetricsResult,
   RepoIndex,
   TimelinePoint,
+  TopOwner,
 } from '../shared/types';
 import { buildAuthorResolver } from './authors';
 
@@ -19,12 +20,18 @@ interface FileStat {
   authors: Set<string>;
   first: number;
   last: number;
+  /** Commits with churn > 0 on this file (n_H,f). */
+  modifications: Set<number>;
+  /** Churn attributed to each author on this file (for ownership ω_H,f,a). */
+  authorChurn: Map<string, number>;
 }
 interface DirStat {
   commits: Set<number>;
   added: number;
   removed: number;
   files: Set<number>;
+  modifications: Set<number>;
+  authorChurn: Map<string, number>;
 }
 interface AuthorStat {
   commits: Set<number>;
@@ -111,7 +118,7 @@ export function computeMetrics(
   const dirOf = (d: string): DirStat => {
     let s = dirStats.get(d);
     if (!s) {
-      s = { commits: new Set(), added: 0, removed: 0, files: new Set() };
+      s = { commits: new Set(), added: 0, removed: 0, files: new Set(), modifications: new Set(), authorChurn: new Map() };
       dirStats.set(d, s);
     }
     return s;
@@ -134,10 +141,18 @@ export function computeMetrics(
 
   // Zero-activity files/dirs still belong to H[F]/H[D].
   for (const idx of universe) {
-    fileStats.set(idx, { commits: new Set(), added: 0, removed: 0, authors: new Set(), first: Infinity, last: -Infinity });
+    fileStats.set(idx, {
+      commits: new Set(), added: 0, removed: 0, authors: new Set(), first: Infinity, last: -Infinity,
+      modifications: new Set(), authorChurn: new Map(),
+    });
     for (const d of dirsOf(paths[idx])) dirOf(d).files.add(idx);
   }
   dirOf(''); // the root is always part of H[D]
+
+  // |H| per the brief: the committer-date/author/mode-selected commit set,
+  // independent of any path scope (scope only restricts which objects o are
+  // reported, not the denominator of rate formulas).
+  const totalH = H.length;
 
   let totalAdded = 0;
   let totalRemoved = 0;
@@ -167,11 +182,21 @@ export function computeMetrics(
       if (c.date < fstat.first) fstat.first = c.date;
       if (c.date > fstat.last) fstat.last = c.date;
 
+      const churn = ch.added + ch.removed;
+      if (churn > 0) {
+        fstat.modifications.add(ci);
+        fstat.authorChurn.set(akey, (fstat.authorChurn.get(akey) ?? 0) + churn);
+      }
+
       for (const d of dirsOf(paths[ch.path])) {
         const dstat = dirOf(d);
         dstat.commits.add(ci);
         dstat.added += ch.added;
         dstat.removed += ch.removed;
+        if (churn > 0) {
+          dstat.modifications.add(ci);
+          dstat.authorChurn.set(akey, (dstat.authorChurn.get(akey) ?? 0) + churn);
+        }
       }
 
       const astat = statOf(akey);
@@ -217,13 +242,33 @@ export function computeMetrics(
   }
 
   // ---- Files
+  const topOwnerOf = (authorChurn: Map<string, number>, churn: number): TopOwner | null => {
+    if (churn <= 0 || authorChurn.size === 0) return null;
+    let bestKey = '';
+    let bestChurn = -1;
+    for (const [k, v] of authorChurn) {
+      if (v > bestChurn) {
+        bestChurn = v;
+        bestKey = k;
+      }
+    }
+    return { key: bestKey, name: groupByKey.get(bestKey)?.name ?? bestKey, share: bestChurn / churn };
+  };
+
   const files: FileMetric[] = [];
   for (const [idx, s] of fileStats) {
+    const churn = s.added + s.removed;
     files.push({
       path: paths[idx],
       commits: s.commits.size,
       added: s.added,
       removed: s.removed,
+      growth: s.added - s.removed,
+      churn,
+      modifications: s.modifications.size,
+      modFrequency: totalH > 0 ? s.modifications.size / totalH : 0,
+      churnRate: totalH > 0 ? churn / totalH : 0,
+      topOwner: topOwnerOf(s.authorChurn, churn),
       authors: s.authors.size,
       firstDate: Number.isFinite(s.first) ? s.first : 0,
       lastDate: Number.isFinite(s.last) ? s.last : 0,
@@ -250,11 +295,18 @@ export function computeMetrics(
   }
   const dirs: DirMetric[] = [];
   for (const [d, s] of dirStats) {
+    const churn = s.added + s.removed;
     dirs.push({
       path: d,
       commits: s.commits.size,
       added: s.added,
       removed: s.removed,
+      growth: s.added - s.removed,
+      churn,
+      modifications: s.modifications.size,
+      modFrequency: totalH > 0 ? s.modifications.size / totalH : 0,
+      churnRate: totalH > 0 ? churn / totalH : 0,
+      topOwner: topOwnerOf(s.authorChurn, churn),
       files: s.files.size,
       subdirs: subdirCount.get(d) ?? 0,
     });
@@ -277,6 +329,8 @@ export function computeMetrics(
       commits: s.commits.size,
       added: s.added,
       removed: s.removed,
+      growth: s.added - s.removed,
+      churn: s.added + s.removed,
       files: s.files.size,
       firstDate: Number.isFinite(s.first) ? s.first : 0,
       lastDate: Number.isFinite(s.last) ? s.last : 0,
@@ -314,6 +368,11 @@ export function computeMetrics(
   // ---- Timeline (UTC day/week/month buckets over the scoped commit set)
   const timeline = buildTimeline(commits, scopedCommits, rowAdded, rowRemoved);
 
+  // Repository metrics are directory metrics on the root (per the brief).
+  const rootStat = dirStats.get('');
+  const rootChurn = rootStat ? rootStat.added + rootStat.removed : 0;
+  const rootModifications = rootStat ? rootStat.modifications.size : 0;
+
   return {
     summary: {
       commits: scopedCommits.length,
@@ -323,6 +382,10 @@ export function computeMetrics(
       added: totalAdded,
       removed: totalRemoved,
       net: totalAdded - totalRemoved,
+      churn: rootChurn,
+      modifications: rootModifications,
+      modFrequency: totalH > 0 ? rootModifications / totalH : 0,
+      churnRate: totalH > 0 ? rootChurn / totalH : 0,
       firstDate,
       lastDate,
       headHash: index.headHash,

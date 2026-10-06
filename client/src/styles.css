@@ -269,6 +269,32 @@ td.path-cell { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 td.subject-cell { max-width: 420px; }
 .hash { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; color: var(--muted); font-size: 12px; }
 
+.owner-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 120px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.owner-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(90deg, rgba(97, 175, 239, 0.35), rgba(97, 175, 239, 0.12));
+  z-index: 0;
+}
+.owner-label {
+  position: relative;
+  z-index: 1;
+  color: var(--text);
+}
+
 .pos { color: var(--green); }
 .neg { color: var(--red); }
 .zero { color: var(--muted); }

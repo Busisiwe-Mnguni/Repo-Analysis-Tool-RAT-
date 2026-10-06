@@ -103,11 +103,32 @@ export interface MetricsFilter {
   limit?: number;
 }
 
+/** Author with the largest churn share on a file/directory (ω_H,o,a realization). */
+export interface TopOwner {
+  key: string;
+  name: string;
+  /** Fraction (0..1) of the object's churn attributable to this author. */
+  share: number;
+}
+
 export interface FileMetric {
   path: string;
+  /** Commits touching this file (any recorded change, including 0-line touches). */
   commits: number;
   added: number;
   removed: number;
+  /** Growth δ_H,f = added - removed. */
+  growth: number;
+  /** Churn λ_H,f = added + removed. */
+  churn: number;
+  /** Modifications n_H,f: commits with churn > 0 (excludes pure renames/mode-only touches). */
+  modifications: number;
+  /** Modification frequency η_H,f = n_H,f / |H|. */
+  modFrequency: number;
+  /** Churn rate ρ_H,f = λ_H,f / |H|. */
+  churnRate: number;
+  /** Author with the largest ownership share of this file's churn. */
+  topOwner: TopOwner | null;
   authors: number;
   firstDate: number;
   lastDate: number;
@@ -119,6 +140,17 @@ export interface DirMetric {
   commits: number;
   added: number;
   removed: number;
+  /** Growth δ_H,d — recursive sum over immediate files and subdirectories. */
+  growth: number;
+  /** Churn λ_H,d — recursive sum over immediate files and subdirectories. */
+  churn: number;
+  /** Modifications n_H,d: commits with churn > 0 somewhere under this directory. */
+  modifications: number;
+  /** Modification frequency η_H,d = n_H,d / |H|. */
+  modFrequency: number;
+  /** Churn rate ρ_H,d = λ_H,d / |H|. */
+  churnRate: number;
+  topOwner: TopOwner | null;
   files: number;
   subdirs: number;
 }
@@ -130,6 +162,10 @@ export interface AuthorMetric {
   commits: number;
   added: number;
   removed: number;
+  /** Growth = added - removed. */
+  growth: number;
+  /** Churn = added + removed. */
+  churn: number;
   files: number;
   firstDate: number;
   lastDate: number;
@@ -162,6 +198,12 @@ export interface MetricsResult {
     added: number;
     removed: number;
     net: number;
+    /** Repository metrics are directory metrics on the root; churn = added + removed. */
+    churn: number;
+    /** Modifications on the root directory: commits with churn > 0, out of |H|. */
+    modifications: number;
+    modFrequency: number;
+    churnRate: number;
     firstDate: number;
     lastDate: number;
     headHash: string;

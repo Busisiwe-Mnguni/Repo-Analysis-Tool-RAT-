@@ -86,10 +86,19 @@ async function main() {
   check('summary.net', m.summary.net, 58);
 
   // Per-file (rename attributed to new path; deletion on old path; binary absent)
-  check('file README.md', metricOf(m.files, 'README.md'), {
+  check('file README.md', {
+    path: metricOf(m.files, 'README.md')?.path, commits: metricOf(m.files, 'README.md')?.commits,
+    added: metricOf(m.files, 'README.md')?.added, removed: metricOf(m.files, 'README.md')?.removed,
+    authors: metricOf(m.files, 'README.md')?.authors, existsInHead: metricOf(m.files, 'README.md')?.existsInHead,
+  }, {
     path: 'README.md', commits: 3, added: 8, removed: 1, authors: 2, existsInHead: true,
-    firstDate: m.files.find((f) => f.path === 'README.md')?.firstDate, lastDate: m.files.find((f) => f.path === 'README.md')?.lastDate,
   });
+  // New formal-spec fields: growth, churn, modifications, modFrequency, churnRate, topOwner.
+  check('file README.md: growth/churn/modifications', {
+    growth: metricOf(m.files, 'README.md').growth, churn: metricOf(m.files, 'README.md').churn,
+    modifications: metricOf(m.files, 'README.md').modifications,
+  }, { growth: 7, churn: 9, modifications: 3 });
+  check('file README.md: topOwner', metricOf(m.files, 'README.md').topOwner, { key: 'Alice Alison <alice@x>', name: 'Alice Alison', share: 7 / 9 });
   check('file src/app.ts (rename-out adds nothing)', metricOf(m.files, 'src/app.ts') && {
     commits: metricOf(m.files, 'src/app.ts').commits, added: metricOf(m.files, 'src/app.ts').added,
     removed: metricOf(m.files, 'src/app.ts').removed, authors: metricOf(m.files, 'src/app.ts').authors,

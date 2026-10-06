@@ -23,3 +23,13 @@ export function shortHash(h: string): string {
 export function signedCls(n: number): string {
   return n > 0 ? 'pos' : n < 0 ? 'neg' : 'zero';
 }
+
+/** Format a 0..1 fraction as a percentage, e.g. 0.734 -> "73%". */
+export function fmtPct(n: number): string {
+  return `${Math.round(n * 100)}%`;
+}
+
+/** Format a rate (events per commit) with up to 2 decimals, trimming trailing zeros. */
+export function fmtRate(n: number): string {
+  return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
+}

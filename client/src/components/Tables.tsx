@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { AuthorMetric, CommitMetric, DirMetric, FileMetric, MetricsResult } from '../../../shared/types';
-import { fmtDate, fmtDay, fmtInt, fmtNet, shortHash, signedCls } from '../format';
+import type { AuthorMetric, CommitMetric, DirMetric, FileMetric, MetricsResult, TopOwner } from '../../../shared/types';
+import { fmtDate, fmtDay, fmtInt, fmtNet, fmtPct, fmtRate, shortHash, signedCls } from '../format';
 
 type Dir = 'asc' | 'desc';
 
@@ -43,6 +43,17 @@ function cmpStr(a: string, b: string, dir: Dir): number {
   return dir === 'asc' ? a.localeCompare(b) : b.localeCompare(a);
 }
 
+/** Author ownership chip — the practical realization of ω_H,o,a (top contributor + share). */
+function OwnerCell({ owner }: { owner: TopOwner | null }) {
+  if (!owner) return <span className="zero">—</span>;
+  return (
+    <span className="owner-chip" title={`${owner.name} owns ${fmtPct(owner.share)} of this object's churn`}>
+      <span className="owner-bar" style={{ width: `${Math.round(owner.share * 100)}%` }} />
+      <span className="owner-label">{owner.name} · {fmtPct(owner.share)}</span>
+    </span>
+  );
+}
+
 // ---- Summary cards -------------------------------------------------------------
 
 export function SummaryCards({ metrics }: { metrics: MetricsResult }) {
@@ -54,7 +65,10 @@ export function SummaryCards({ metrics }: { metrics: MetricsResult }) {
     { label: 'Directories', value: fmtInt(s.dirs), sub: 'incl. root' },
     { label: 'Lines added', value: `+${fmtInt(s.added)}`, cls: 'pos' },
     { label: 'Lines removed', value: `−${fmtInt(s.removed)}`, cls: 'neg' },
-    { label: 'Net lines', value: fmtNet(s.net), cls: signedCls(s.net) },
+    { label: 'Net lines (growth)', value: fmtNet(s.net), cls: signedCls(s.net) },
+    { label: 'Churn', value: fmtInt(s.churn), sub: 'repo-wide (root dir)' },
+    { label: 'Churn rate', value: fmtRate(s.churnRate), sub: 'lines churned / commit' },
+    { label: 'Modification freq.', value: fmtPct(s.modFrequency), sub: `${fmtInt(s.modifications)} modifying commits` },
   ];
   return (
     <div className="summary-grid">
@@ -89,12 +103,13 @@ export function AuthorsTable({
   activeAuthors: string[];
   onToggle: (key: string) => void;
 }) {
-  const sort = useSort<'commits' | 'name' | 'added' | 'removed' | 'files'>('commits');
+  const sort = useSort<'commits' | 'name' | 'added' | 'removed' | 'churn' | 'files'>('commits');
   const sorted = [...rows].sort((a, b) => {
     switch (sort.key) {
       case 'name': return cmpStr(a.name, b.name, sort.dir);
       case 'added': return cmpNum(a.added, b.added, sort.dir);
       case 'removed': return cmpNum(a.removed, b.removed, sort.dir);
+      case 'churn': return cmpNum(a.churn, b.churn, sort.dir);
       case 'files': return cmpNum(a.files, b.files, sort.dir);
       default: return cmpNum(a.commits, b.commits, sort.dir) || cmpNum(a.added, b.added, 'desc');
     }
@@ -108,7 +123,8 @@ export function AuthorsTable({
             <Th k="commits" sort={sort} label="Commits" num />
             <Th k="added" sort={sort} label="Added" num />
             <Th k="removed" sort={sort} label="Removed" num />
-            <th className="num">Net</th>
+            <th className="num">Growth</th>
+            <Th k="churn" sort={sort} label="Churn" num />
             <Th k="files" sort={sort} label="Files" num />
             <th>Last commit</th>
           </tr>
@@ -128,14 +144,15 @@ export function AuthorsTable({
               <td className="num">{fmtInt(a.commits)}</td>
               <td className="num pos">+{fmtInt(a.added)}</td>
               <td className="num neg">−{fmtInt(a.removed)}</td>
-              <td className={`num ${signedCls(a.added - a.removed)}`}>{fmtNet(a.added - a.removed)}</td>
+              <td className={`num ${signedCls(a.growth)}`}>{fmtNet(a.growth)}</td>
+              <td className="num">{fmtInt(a.churn)}</td>
               <td className="num">{fmtInt(a.files)}</td>
               <td>{fmtDate(a.lastDate)}</td>
             </tr>
           ))}
           {sorted.length === 0 && (
             <tr>
-              <td colSpan={7} className="zero">No authors in the selected commit set.</td>
+              <td colSpan={8} className="zero">No authors in the selected commit set.</td>
             </tr>
           )}
         </tbody>
@@ -155,15 +172,18 @@ export function FilesTable({
   activePath: string;
   onSelect: (path: string) => void;
 }) {
-  const sort = useSort<'path' | 'commits' | 'added' | 'removed' | 'authors' | 'lastDate'>('commits');
+  const sort = useSort<'path' | 'commits' | 'added' | 'removed' | 'churn' | 'churnRate' | 'modFrequency' | 'authors' | 'lastDate'>('commits');
   const sorted = [...rows].sort((a, b) => {
     switch (sort.key) {
       case 'path': return cmpStr(a.path, b.path, sort.dir);
       case 'added': return cmpNum(a.added, b.added, sort.dir);
       case 'removed': return cmpNum(a.removed, b.removed, sort.dir);
+      case 'churn': return cmpNum(a.churn, b.churn, sort.dir);
+      case 'churnRate': return cmpNum(a.churnRate, b.churnRate, sort.dir);
+      case 'modFrequency': return cmpNum(a.modFrequency, b.modFrequency, sort.dir);
       case 'authors': return cmpNum(a.authors, b.authors, sort.dir);
       case 'lastDate': return cmpNum(a.lastDate, b.lastDate, sort.dir);
-      default: return cmpNum(a.commits, b.commits, sort.dir) || cmpNum(a.added + a.removed, b.added + b.removed, 'desc');
+      default: return cmpNum(a.commits, b.commits, sort.dir) || cmpNum(a.churn, b.churn, 'desc');
     }
   });
   return (
@@ -175,7 +195,11 @@ export function FilesTable({
             <Th k="commits" sort={sort} label="Commits" num />
             <Th k="added" sort={sort} label="Added" num />
             <Th k="removed" sort={sort} label="Removed" num />
-            <th className="num">Net</th>
+            <th className="num">Growth</th>
+            <Th k="churn" sort={sort} label="Churn" num />
+            <Th k="modFrequency" sort={sort} label="Mod. freq." num />
+            <Th k="churnRate" sort={sort} label="Churn rate" num />
+            <th>Top owner</th>
             <Th k="authors" sort={sort} label="Authors" num />
             <Th k="lastDate" sort={sort} label="Last change" />
             <th className="num">In HEAD</th>
@@ -193,7 +217,11 @@ export function FilesTable({
               <td className="num">{fmtInt(f.commits)}</td>
               <td className="num pos">+{fmtInt(f.added)}</td>
               <td className="num neg">−{fmtInt(f.removed)}</td>
-              <td className={`num ${signedCls(f.added - f.removed)}`}>{fmtNet(f.added - f.removed)}</td>
+              <td className={`num ${signedCls(f.growth)}`}>{fmtNet(f.growth)}</td>
+              <td className="num">{fmtInt(f.churn)}</td>
+              <td className="num">{fmtPct(f.modFrequency)}</td>
+              <td className="num">{fmtRate(f.churnRate)}</td>
+              <td><OwnerCell owner={f.topOwner} /></td>
               <td className="num">{fmtInt(f.authors)}</td>
               <td>{fmtDate(f.lastDate)}</td>
               <td className="num">{f.existsInHead ? <span className="tick">✓</span> : <span className="cross">—</span>}</td>
@@ -201,7 +229,7 @@ export function FilesTable({
           ))}
           {sorted.length === 0 && (
             <tr>
-              <td colSpan={8} className="zero">No files in the selected commit set.</td>
+              <td colSpan={12} className="zero">No files in the selected commit set.</td>
             </tr>
           )}
         </tbody>
@@ -221,7 +249,7 @@ export function DirsTable({
   activePath: string;
   onSelect: (path: string) => void;
 }) {
-  const sort = useSort<'path' | 'commits' | 'files' | 'subdirs' | 'added' | 'removed'>('commits');
+  const sort = useSort<'path' | 'commits' | 'files' | 'subdirs' | 'added' | 'removed' | 'churn' | 'churnRate' | 'modFrequency'>('commits');
   const sorted = [...rows].sort((a, b) => {
     switch (sort.key) {
       case 'path': return cmpStr(a.path, b.path, sort.dir);
@@ -229,6 +257,9 @@ export function DirsTable({
       case 'subdirs': return cmpNum(a.subdirs, b.subdirs, sort.dir);
       case 'added': return cmpNum(a.added, b.added, sort.dir);
       case 'removed': return cmpNum(a.removed, b.removed, sort.dir);
+      case 'churn': return cmpNum(a.churn, b.churn, sort.dir);
+      case 'churnRate': return cmpNum(a.churnRate, b.churnRate, sort.dir);
+      case 'modFrequency': return cmpNum(a.modFrequency, b.modFrequency, sort.dir);
       default: return cmpNum(a.commits, b.commits, sort.dir) || cmpStr(a.path, b.path, 'asc');
     }
   });
@@ -243,6 +274,11 @@ export function DirsTable({
             <Th k="subdirs" sort={sort} label="Subdirs" num />
             <Th k="added" sort={sort} label="Added" num />
             <Th k="removed" sort={sort} label="Removed" num />
+            <th className="num">Growth</th>
+            <Th k="churn" sort={sort} label="Churn" num />
+            <Th k="modFrequency" sort={sort} label="Mod. freq." num />
+            <Th k="churnRate" sort={sort} label="Churn rate" num />
+            <th>Top owner</th>
           </tr>
         </thead>
         <tbody>
@@ -259,11 +295,16 @@ export function DirsTable({
               <td className="num">{fmtInt(d.subdirs)}</td>
               <td className="num pos">+{fmtInt(d.added)}</td>
               <td className="num neg">−{fmtInt(d.removed)}</td>
+              <td className={`num ${signedCls(d.growth)}`}>{fmtNet(d.growth)}</td>
+              <td className="num">{fmtInt(d.churn)}</td>
+              <td className="num">{fmtPct(d.modFrequency)}</td>
+              <td className="num">{fmtRate(d.churnRate)}</td>
+              <td><OwnerCell owner={d.topOwner} /></td>
             </tr>
           ))}
           {sorted.length === 0 && (
             <tr>
-              <td colSpan={6} className="zero">No directories in the selected commit set.</td>
+              <td colSpan={11} className="zero">No directories in the selected commit set.</td>
             </tr>
           )}
         </tbody>
